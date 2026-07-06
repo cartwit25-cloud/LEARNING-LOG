@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>學習手帳 ｜ 每日學習筆記</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#F7F5F0;
+    --paper:#FFFFFF;
+    --ink:#14141F;
+    --ink-soft:#63637A;
+    --line:#E7E5DD;
+
+    --coral:#FF4B3E;
+    --amber:#FFB627;
+    --emerald:#00A878;
+    --cobalt:#2C5AE0;
+    --violet:#7B4DFF;
+
+    --shadow: 0 4px 14px rgba(20,20,31,0.07);
+    --shadow-lift: 0 14px 32px rgba(20,20,31,0.16);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    min-height:100vh;
+    font-family:'Noto Sans TC', sans-serif;
+    color:var(--ink);
+  }
+  .display{font-family:'Space Grotesk','Noto Sans TC', sans-serif;font-weight:700;}
+  .mono{font-family:'IBM Plex Mono', monospace;}
+
+  a{color:inherit;}
+  button{font-family:inherit;cursor:pointer;}
+
+  /* ---------- Layout ---------- */
+  .app{max-width:1180px;margin:0 auto;padding:0 0 80px;}
+
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:16px;flex-wrap:wrap;padding:26px 22px;margin-bottom:22px;
+    background:var(--ink);color:#fff;
+    border-radius:0 0 22px 22px;
+  }
+  header.top h1{
+    font-family:'Space Grotesk','Noto Sans TC',sans-serif;
+    font-size:24px;font-weight:700;margin:0;display:flex;align-items:center;gap:10px;letter-spacing:-0.01em;
+  }
+  header.top h1 .eyebrow{
+    display:inline-block;background:var(--amber);color:var(--ink);
+    padding:3px 10px;border-radius:6px;
+    font-size:11px;font-family:'IBM Plex Mono',monospace;font-weight:500;letter-spacing:0.02em;
+  }
+
+  .streak-card{
+    display:flex;align-items:center;gap:20px;
+  }
+  .streak-block{text-align:right;}
+  .streak-block .num{font-size:28px;font-weight:700;color:var(--amber);font-family:'Space Grotesk';line-height:1;}
+  .streak-block .num.alt{color:var(--emerald);}
+  .streak-block .label{font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px;}
+  .stamp-row{display:flex;gap:3px;margin-top:6px;}
+  .stamp{width:16px;height:5px;border-radius:2px;background:rgba(255,255,255,0.18);}
+  .stamp.filled{background:var(--amber);}
+
+  /* ---------- Review banner ---------- */
+  .review-banner{
+    background:var(--cobalt);
+    color:#fff;border-radius:14px;padding:16px 20px;margin:0 0 20px;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    flex-wrap:wrap;
+  }
+  .review-banner strong{font-family:'Space Grotesk','Noto Sans TC';font-size:15px;font-weight:700;}
+  .review-banner .items{display:flex;gap:8px;flex-wrap:wrap;}
+  .review-chip{
+    background:rgba(255,255,255,0.16);color:#fff;border-radius:8px;
+    padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:8px;
+  }
+  .review-chip button{
+    background:var(--amber);color:var(--ink);border:none;border-radius:5px;
+    width:20px;height:20px;font-size:12px;line-height:1;font-weight:700;
+  }
+
+  /* ---------- Tabs ---------- */
+  .tabs{display:flex;gap:6px;margin:0 22px 18px;flex-wrap:wrap;border-bottom:2px solid var(--line);padding-bottom:0;}
+  .tab{
+    padding:10px 18px;border:none;border-bottom:3px solid transparent;
+    font-weight:700;font-size:14px;background:transparent;color:var(--ink-soft);
+    font-family:'Noto Sans TC';transition:color .15s, border-color .15s;margin-bottom:-2px;
+  }
+  .tab.active{color:var(--ink);border-bottom-color:var(--coral);}
+
+  /* ---------- Controls ---------- */
+  .controls{
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 22px 20px;
+  }
+  .controls input[type=text], .controls select{
+    border:2px solid var(--line);background:var(--paper);border-radius:8px;
+    padding:9px 12px;font-size:14px;color:var(--ink);
+  }
+  .controls input[type=text]{flex:1;min-width:160px;}
+  .btn{
+    border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:14px;
+    background:var(--ink);color:#fff;
+  }
+  .btn.primary{background:var(--coral);}
+  .btn.ghost{background:var(--paper);color:var(--ink);border:2px solid var(--line);}
+  .btn.small{padding:7px 12px;font-size:12px;border-radius:7px;}
+
+  /* ---------- List view ---------- */
+  #viewContainer{padding:0 22px;}
+  .date-group{margin-bottom:22px;}
+  .date-group h3{
+    font-family:'IBM Plex Mono';font-size:12px;font-weight:500;color:var(--ink-soft);
+    letter-spacing:0.03em;padding-bottom:8px;margin-bottom:10px;border-bottom:1px solid var(--line);
+  }
+  .note-row{
+    display:flex;gap:14px;align-items:flex-start;background:var(--paper);
+    border-radius:10px;padding:14px 16px;margin-bottom:8px;
+    border-left:4px solid var(--coral);cursor:pointer;transition:transform .12s;
+  }
+  .note-row:hover{transform:translateX(2px);}
+  .note-row .icon{font-size:18px;}
+  .note-row .body{flex:1;min-width:0;}
+  .note-row .title{font-weight:700;font-family:'Noto Sans TC';font-size:15px;}
+  .note-row .snippet{font-size:13px;color:var(--ink-soft);margin-top:3px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tag-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+  .tag{
+    font-size:11px;font-weight:500;padding:3px 10px;border-radius:5px;background:var(--bg);color:var(--ink-soft);
+  }
+
+  /* ---------- Card view ---------- */
+  .card-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;
+  }
+  .note-card{
+    background:var(--paper);border-radius:12px;padding:0;overflow:hidden;
+    cursor:pointer;transition:transform .15s, box-shadow .15s;box-shadow:var(--shadow);
+    border-top:5px solid var(--coral);
+  }
+  .note-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lift);}
+  .note-card .inner{padding:15px;}
+  .note-card img{width:100%;display:block;height:120px;object-fit:cover;}
+  .note-card .title{font-family:'Noto Sans TC';font-weight:700;font-size:15px;margin-bottom:5px;}
+  .note-card .snippet{font-size:12.5px;color:var(--ink-soft);
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  .note-card .meta{font-size:11px;color:var(--ink-soft);margin-top:10px;font-family:'IBM Plex Mono';}
+
+  /* ---------- Mindmap ---------- */
+  .mindmap-wrap{
+    background:var(--paper);border-radius:14px;
+    height:70vh;position:relative;overflow:hidden;border:1px solid var(--line);
+  }
+  .mindmap-toolbar{
+    position:absolute;top:12px;right:12px;display:flex;gap:8px;z-index:5;
+  }
+  .mindmap-hint{
+    position:absolute;bottom:12px;left:16px;font-size:12px;color:var(--ink-soft);z-index:5;
+    background:rgba(255,255,255,0.9);padding:5px 12px;border-radius:7px;font-family:'IBM Plex Mono';
+  }
+  svg.mindmap{width:100%;height:100%;cursor:grab;}
+  .mm-node circle{stroke:#fff;stroke-width:2px;}
+  .mm-node text{font-family:'Noto Sans TC';font-size:12px;fill:var(--ink);pointer-events:none;}
+  .mm-link{stroke:var(--line);stroke-width:2px;fill:none;}
+  .mm-link.manual{stroke:var(--cobalt);stroke-dasharray:4 3;}
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(20,20,31,0.45);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:16px;
+  }
+  .overlay.open{display:flex;}
+  .modal{
+    background:var(--paper);border-radius:16px;max-width:560px;width:100%;
+    max-height:88vh;overflow-y:auto;padding:26px;box-shadow:var(--shadow-lift);
+  }
+  .modal h2{font-family:'Space Grotesk','Noto Sans TC';margin-top:0;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:13px;font-weight:700;margin-bottom:5px;color:var(--ink-soft);}
+  .field input[type=text], .field input[type=date], .field textarea, .field select{
+    width:100%;border:2px solid var(--line);border-radius:8px;padding:9px 12px;
+    font-family:inherit;font-size:14px;color:var(--ink);
+  }
+  .field textarea{min-height:90px;resize:vertical;}
+  .chip-select{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip-option{
+    padding:6px 13px;border-radius:7px;border:2px solid var(--line);font-size:13px;background:var(--paper);font-weight:500;
+  }
+  .chip-option.selected{background:var(--violet);color:#fff;border-color:var(--violet);}
+  .modal-actions{display:flex;justify-content:space-between;margin-top:18px;gap:10px;}
+  .fab{
+    position:fixed;bottom:24px;right:24px;background:var(--coral);color:#fff;
+    border:none;border-radius:14px;width:56px;height:56px;font-size:26px;box-shadow:var(--shadow-lift);z-index:20;
+  }
+  .empty-state{text-align:center;padding:60px 20px;color:var(--ink-soft);}
+  .empty-state .big{font-size:40px;}
+
+  @media (max-width:640px){
+    header.top{padding:20px 16px;border-radius:0 0 16px 16px;}
+    header.top h1{font-size:20px;}
+    .tabs, .controls{margin-left:14px;margin-right:14px;}
+    #viewContainer{padding:0 14px;}
+    .mindmap-wrap{height:60vh;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <h1>學習筆記 <span class="eyebrow">LEARNING LOG</span></h1>
+    <div class="streak-card">
+      <div class="streak-block">
+        <div class="num" id="streakNum">0</div>
+        <div class="label">連續記錄天</div>
+        <div class="stamp-row" id="stampRow"></div>
+      </div>
+      <div class="streak-block">
+        <div class="num alt" id="monthNum">0</div>
+        <div class="label">本月筆記</div>
+      </div>
+    </div>
+  </header>
+
+  <div id="reviewBanner"></div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="list">🗒️ 列表</button>
+    <button class="tab" data-view="card">🖼️ 卡片</button>
+    <button class="tab" data-view="mindmap-auto">🌳 心智圖・自動</button>
+    <button class="tab" data-view="mindmap-free">✨ 心智圖・自由編輯</button>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="searchInput" placeholder="🔍 搜尋標題、內容、分類...">
+    <select id="filterCategory"><option value="">全部分類</option></select>
+    <select id="filterSource">
+      <option value="">全部來源</option>
+      <option value="書籍">📖 書籍</option>
+      <option value="影片">🎬 影片</option>
+      <option value="Podcast">🎙️ Podcast</option>
+      <option value="其他">✏️ 其他</option>
+    </select>
+    <button class="btn ghost small" id="refreshBtn">↻ 重新整理</button>
+  </div>
+
+  <div id="viewContainer"></div>
+</div>
+
+<button class="fab" id="addFab">＋</button>
+
+<!-- 新增/編輯筆記 Modal -->
+<div class="overlay" id="noteOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">新增筆記</h2>
+    <input type="hidden" id="noteId">
+    <div class="field">
+      <label>標題</label>
+      <input type="text" id="fTitle" placeholder="這篇筆記在說什麼？">
+    </div>
+    <div class="field">
+      <label>內容 / 心得</label>
+      <textarea id="fContent" placeholder="記下重點、心得、想法..."></textarea>
+    </div>
+    <div class="field">
+      <label>日期</label>
+      <input type="date" id="fDate">
+    </div>
+    <div class="field">
+      <label>來源類型</label>
+      <select id="fSourceType">
+        <option value="書籍">📖 書籍</option>
+        <option value="影片">🎬 影片</option>
+        <option value="Podcast">🎙️ Podcast</option>
+        <option value="其他">✏️ 其他</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>來源名稱（選填）</label>
+      <input type="text" id="fSourceName" placeholder="書名 / 影片名稱 / 集數">
+    </div>
+    <div class="field">
+      <label>分類（可多選，或輸入新分類後按 Enter）</label>
+      <div class="chip-select" id="categoryChips"></div>
+      <input type="text" id="newCategoryInput" placeholder="輸入新分類名稱後按 Enter" style="margin-top:8px;">
+    </div>
+    <div class="field">
+      <label>附圖（選填，例如書頁截圖）</label>
+      <input type="file" id="fImage" accept="image/*">
+      <div id="imagePreviewWrap" style="margin-top:8px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="deleteNoteBtn" style="display:none;">刪除這篇筆記</button>
+      <div style="flex:1"></div>
+      <button class="btn ghost" id="cancelModalBtn">取消</button>
+      <button class="btn primary" id="saveNoteBtn">儲存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   設定：把你部署 Apps Script 後拿到的網址貼在這裡
+   ========================================================= */
+const API_URL = '請貼上你的 Google Apps Script 網頁應用程式網址';
+
+/* =========================================================
+   狀態
+   ========================================================= */
+let state = {
+  notes: [],
+  categories: [],
+  relations: [],
+  positions: [],
+  view: 'list',
+  search: '',
+  filterCategory: '',
+  filterSource: '',
+  connectMode: false,
+  connectFrom: null
+};
+
+const LS_KEY = 'learning_notes_cache_v1';
+
+function loadCache(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      const data = JSON.parse(raw);
+      state.notes = data.notes || [];
+      state.categories = data.categories || [];
+      state.relations = data.relations || [];
+      state.positions = data.positions || [];
+    }
+  }catch(e){ console.warn('cache load failed', e); }
+}
+function saveCache(){
+  localStorage.setItem(LS_KEY, JSON.stringify({
+    notes: state.notes, categories: state.categories,
+    relations: state.relations, positions: state.positions
+  }));
+}
+
+/* =========================================================
+   API
+   ========================================================= */
+async function apiGet(){
+  const res = await fetch(API_URL);
+  return res.json();
+}
+async function apiPost(payload){
+  const res = await fetch(API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'}, // Apps Script 對 text/plain 較不會觸發 CORS preflight 問題
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+async function refreshFromServer(){
+  if(API_URL.indexOf('請貼上') === 0){
+    console.warn('尚未設定 API_URL，僅使用本機快取資料');
+    return;
+  }
+  try{
+    const data = await apiGet();
+    if(data.ok){
+      state.notes = (data.notes||[]).map(normalizeNote);
+      state.categories = data.categories||[];
+      state.relations = data.relations||[];
+      state.positions = data.positions||[];
+      saveCache();
+      renderAll();
+    }
+  }catch(e){
+    console.warn('連線 Google Sheets 失敗，使用本機快取', e);
+  }
+}
+
+function normalizeNote(n){
+  return {
+    ...n,
+    categories: typeof n.categories === 'string' ? n.categories.split(',').filter(Boolean) : (n.categories||[]),
+    reviewed: n.reviewed === true || n.reviewed === 'TRUE' || n.reviewed === 'true'
+  };
+}
+
+/* =========================================================
+   初始化
+   ========================================================= */
+document.addEventListener('DOMContentLoaded', () => {
+  loadCache();
+  renderAll();
+  refreshFromServer();
+  bindEvents();
+});
+
+function bindEvents(){
+  document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      state.view = tab.dataset.view;
+      renderView();
+    });
+  });
+  document.getElementById('searchInput').addEventListener('input', e=>{
+    state.search = e.target.value.trim().toLowerCase();
+    renderView();
+  });
+  document.getElementById('filterCategory').addEventListener('change', e=>{
+    state.filterCategory = e.target.value; renderView();
+  });
+  document.getElementById('filterSource').addEventListener('change', e=>{
+    state.filterSource = e.target.value; renderView();
+  });
+  document.getElementById('refreshBtn').addEventListener('click', refreshFromServer);
+  document.getElementById('addFab').addEventListener('click', ()=>openModal());
+  document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
+  document.getElementById('saveNoteBtn').addEventListener('click', saveNote);
+  document.getElementById('deleteNoteBtn').addEventListener('click', deleteNoteHandler);
+  document.getElementById('newCategoryInput').addEventListener('keydown', e=>{
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      const val = e.target.value.trim();
+      if(val){
+        addLocalCategoryIfMissing(val);
+        toggleCategoryChip(val);
+        e.target.value = '';
+        renderCategoryChips();
+      }
+    }
+  });
+  document.getElementById('fImage').addEventListener('change', handleImageSelect);
+}
+
+/* =========================================================
+   渲染總控
+   ========================================================= */
+function renderAll(){
+  renderStats();
+  renderReviewBanner();
+  renderFilterOptions();
+  renderView();
+}
+
+function renderStats(){
+  const dates = [...new Set(state.notes.map(n=>n.date))].sort().reverse();
+  let streak = 0;
+  let cursor = new Date();
+  for(let i=0;i<dates.length;i++){
+    const d = new Date(dates[i]);
+    const diff = Math.round((cursor - d)/86400000);
+    if(diff === streak){ streak++; cursor = d; } else break;
+  }
+  document.getElementById('streakNum').textContent = streak;
+  const stampRow = document.getElementById('stampRow');
+  stampRow.innerHTML = '';
+  for(let i=0;i<7;i++){
+    const s = document.createElement('div');
+    s.className = 'stamp' + (i < Math.min(streak,7) ? ' filled':'');
+    stampRow.appendChild(s);
+  }
+  const thisMonth = new Date().toISOString().slice(0,7);
+  const monthCount = state.notes.filter(n=>n.date && n.date.startsWith(thisMonth)).length;
+  document.getElementById('monthNum').textContent = monthCount;
+}
+
+function renderReviewBanner(){
+  const target = document.getElementById('reviewBanner');
+  const today = new Date();
+  const due = state.notes.filter(n=>{
+    if(n.reviewed) return false;
+    const d = new Date(n.date);
+    const diffDays = Math.round((today - d)/86400000);
+    return diffDays >= 6 && diffDays <= 9; // 一週前後的筆記，值得複習
+  });
+  if(due.length === 0){ target.innerHTML=''; return; }
+  target.innerHTML = `
+    <div class="review-banner">
+      <div><strong>🔔 這幾篇是一週前的筆記，要不要回顧一下？</strong></div>
+      <div class="items">
+        ${due.map(n=>`
+          <span class="review-chip">${escapeHtml(n.title)}
+            <button data-id="${n.id}" class="markReviewedBtn" title="標記已複習">✓</button>
+          </span>`).join('')}
+      </div>
+    </div>`;
+  target.querySelectorAll('.markReviewedBtn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.id;
+      const note = state.notes.find(n=>n.id===id);
+      if(note) note.reviewed = true;
+      saveCache(); renderReviewBanner();
+      apiPost({action:'markReviewed', id, reviewed:true}).catch(()=>{});
+    });
+  });
+}
+
+function renderFilterOptions(){
+  const sel = document.getElementById('filterCategory');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">全部分類</option>' +
+    state.categories.map(c=>`<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+  sel.value = current;
+}
+
+function getFilteredNotes(){
+  return state.notes.filter(n=>{
+    if(state.filterCategory && !n.categories.includes(state.filterCategory)) return false;
+    if(state.filterSource && n.sourceType !== state.filterSource) return false;
+    if(state.search){
+      const hay = (n.title+' '+n.content+' '+n.categories.join(' ')).toLowerCase();
+      if(hay.indexOf(state.search) === -1) return false;
+    }
+    return true;
+  }).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+}
+
+function renderView(){
+  const container = document.getElementById('viewContainer');
+  const notes = getFilteredNotes();
+  if(state.view === 'list') return renderListView(container, notes);
+  if(state.view === 'card') return renderCardView(container, notes);
+  if(state.view === 'mindmap-auto') return renderMindmapAuto(container, notes);
+  if(state.view === 'mindmap-free') return renderMindmapFree(container, notes);
+}
+
+const SOURCE_ICON = {'書籍':'📖','影片':'🎬','Podcast':'🎙️','其他':'✏️'};
+
+/* ---------- 列表模式 ---------- */
+function renderListView(container, notes){
+  if(notes.length === 0) return renderEmpty(container);
+  const groups = {};
+  notes.forEach(n=>{ (groups[n.date||'未填日期'] = groups[n.date||'未填日期']||[]).push(n); });
+  const dates = Object.keys(groups).sort().reverse();
+  container.innerHTML = dates.map(date=>`
+    <div class="date-group">
+      <h3>${date}</h3>
+      ${groups[date].map(n=>`
+        <div class="note-row" data-id="${n.id}">
+          <div class="icon">${SOURCE_ICON[n.sourceType]||'✏️'}</div>
+          <div class="body">
+            <div class="title">${escapeHtml(n.title)}</div>
+            <div class="snippet">${escapeHtml(n.content)}</div>
+            <div class="tag-row">${n.categories.map(c=>`<span class="tag">${escapeHtml(c)}</span>`).join('')}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+  container.querySelectorAll('.note-row').forEach(el=>{
+    el.addEventListener('click', ()=>openModal(el.dataset.id));
+  });
+}
+
+/* ---------- 卡片模式 ---------- */
+function renderCardView(container, notes){
+  if(notes.length === 0) return renderEmpty(container);
+  const catColor = {}; state.categories.forEach(c=>catColor[c.name]=c.color);
+  container.innerHTML = `<div class="card-grid">
+    ${notes.map(n=>{
+      const borderColor = catColor[n.categories[0]] || 'var(--coral)';
+      return `
+      <div class="note-card" data-id="${n.id}" style="border-top-color:${borderColor}">
+        ${n.imageUrl ? `<img src="${n.imageUrl}" alt="">` : ''}
+        <div class="inner">
+          <div class="title">${SOURCE_ICON[n.sourceType]||''} ${escapeHtml(n.title)}</div>
+          <div class="snippet">${escapeHtml(n.content)}</div>
+          <div class="tag-row">${n.categories.map(c=>`<span class="tag">${escapeHtml(c)}</span>`).join('')}</div>
+          <div class="meta">${n.date||''}</div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+  container.querySelectorAll('.note-card').forEach(el=>{
+    el.addEventListener('click', ()=>openModal(el.dataset.id));
+  });
+}
+
+function renderEmpty(container){
+  container.innerHTML = `<div class="empty-state">
+    <div class="big">🌱</div>
+    <p>還沒有筆記，點右下角的「＋」開始記錄今天學到的東西吧！</p>
+  </div>`;
+}
+
+/* ---------- 心智圖・自動（依分類） ---------- */
+function renderMindmapAuto(container, notes){
+  container.innerHTML = `
+    <div class="mindmap-wrap">
+      <div class="mindmap-toolbar">
+        <button class="btn small ghost" id="mmAutoExport">⬇ 匯出 PDF</button>
+      </div>
+      <div class="mindmap-hint">🌳 點分類節點可展開／收合，滾輪縮放、拖曳畫布可平移</div>
+      <svg class="mindmap" id="mmAutoSvg"></svg>
+    </div>`;
+  document.getElementById('mmAutoExport').addEventListener('click', ()=>exportMindmapPdf('mmAutoSvg','學習心智圖-自動分類'));
+
+  const catMap = {};
+  state.categories.forEach(c=>catMap[c.name]=c.color);
+
+  const root = {name:'我的學習', children:[]};
+  const byCat = {};
+  notes.forEach(n=>{
+    const cats = n.categories.length ? n.categories : ['未分類'];
+    cats.forEach(c=>{
+      byCat[c] = byCat[c] || [];
+      byCat[c].push(n);
+    });
+  });
+  Object.keys(byCat).forEach(cat=>{
+    root.children.push({
+      name: cat,
+      color: catMap[cat] || '#B892FF',
+      collapsed: false,
+      children: byCat[cat].map(n=>({name:n.title, id:n.id, leaf:true}))
+    });
+  });
+
+  drawRadialTree('mmAutoSvg', root);
+}
+
+function drawRadialTree(svgId, rootData){
+  const svgEl = document.getElementById(svgId);
+  const width = svgEl.clientWidth, height = svgEl.clientHeight;
+  const svg = d3.select(svgEl).attr('viewBox',[-width/2,-height/2,width,height]);
+  const g = svg.append('g');
+
+  svg.call(d3.zoom().scaleExtent([0.3,3]).on('zoom', (ev)=> g.attr('transform', ev.transform)));
+
+  function build(){
+    const hierarchy = d3.hierarchy(rootData, d=> d.collapsed ? null : d.children);
+    const radius = Math.min(width,height)/2 - 60;
+    const tree = d3.tree().size([2*Math.PI, radius]).separation((a,b)=>(a.parent==b.parent?1:2)/a.depth||1);
+    tree(hierarchy);
+    g.selectAll('*').remove();
+
+    g.selectAll('.mm-link').data(hierarchy.links()).join('path')
+      .attr('class','mm-link')
+      .attr('d', d3.linkRadial().angle(d=>d.x).radius(d=>d.y));
+
+    const node = g.selectAll('.mm-node').data(hierarchy.descendants()).join('g')
+      .attr('class','mm-node')
+      .attr('transform', d=>`translate(${d3.pointRadial(d.x, d.y)})`)
+      .style('cursor', d=> d.data.leaf ? 'pointer' : (d.depth===0?'default':'pointer'));
+
+    node.append('circle')
+      .attr('r', d=> d.depth===0 ? 14 : d.data.leaf ? 6 : 10)
+      .attr('fill', d=> d.depth===0 ? '#3A3358' : (d.data.color || '#4EA8DE'));
+
+    node.append('text')
+      .attr('dy','0.32em')
+      .attr('x', d=> d.x < Math.PI === !d.children && d.depth!==0 ? 12 : (d.depth===0?0:-12))
+      .attr('text-anchor', d=> d.depth===0 ? 'middle' : (d.x < Math.PI ? 'start':'end'))
+      .attr('transform', d=> d.depth===0?null:`rotate(${(d.x*180/Math.PI-90)}) ${d.x>=Math.PI?'rotate(180)':''}`)
+      .text(d=> d.depth===0 ? d.data.name : (d.data.name.length>14? d.data.name.slice(0,14)+'…' : d.data.name));
+
+    node.on('click', (ev,d)=>{
+      if(d.data.leaf){ openModal(d.data.id); return; }
+      if(d.depth>0){ d.data.collapsed = !d.data.collapsed; build(); }
+    });
+  }
+  build();
+}
+
+/* ---------- 心智圖・自由編輯（力導向 + 手動連線） ---------- */
+function renderMindmapFree(container, notes){
+  container.innerHTML = `
+    <div class="mindmap-wrap">
+      <div class="mindmap-toolbar">
+        <button class="btn small ghost" id="mmConnectToggle">🔗 連線模式：關</button>
+        <button class="btn small ghost" id="mmFreeExport">⬇ 匯出 PDF</button>
+      </div>
+      <div class="mindmap-hint" id="mmFreeHint">✨ 拖曳節點自由排列；開啟連線模式後依序點兩個節點即可建立關聯</div>
+      <svg class="mindmap" id="mmFreeSvg"></svg>
+    </div>`;
+  document.getElementById('mmFreeExport').addEventListener('click', ()=>exportMindmapPdf('mmFreeSvg','學習心智圖-自由編輯'));
+  const toggleBtn = document.getElementById('mmConnectToggle');
+  toggleBtn.addEventListener('click', ()=>{
+    state.connectMode = !state.connectMode;
+    state.connectFrom = null;
+    toggleBtn.textContent = '🔗 連線模式：' + (state.connectMode ? '開':'關');
+  });
+
+  const catMap = {}; state.categories.forEach(c=>catMap[c.name]=c.color);
+  const posMap = {}; state.positions.forEach(p=>posMap[p.noteId]={x:+p.x,y:+p.y});
+
+  const nodes = notes.map(n=>({
+    id: n.id, name: n.title, type:'note',
+    color: catMap[n.categories[0]] || '#4EA8DE',
+    x: posMap[n.id]?.x, y: posMap[n.id]?.y
+  }));
+  const links = state.relations
+    .filter(r=> nodes.find(n=>n.id===r.fromId) && nodes.find(n=>n.id===r.toId))
+    .map(r=>({...r, source:r.fromId, target:r.toId}));
+
+  drawForceGraph('mmFreeSvg', nodes, links);
+}
+
+function drawForceGraph(svgId, nodes, links){
+  const svgEl = document.getElementById(svgId);
+  const width = svgEl.clientWidth, height = svgEl.clientHeight;
+  const svg = d3.select(svgEl).attr('viewBox',[0,0,width,height]);
+  const g = svg.append('g');
+  svg.call(d3.zoom().scaleExtent([0.3,3]).on('zoom', ev=>g.attr('transform', ev.transform)));
+
+  nodes.forEach(n=>{
+    if(n.x===undefined || isNaN(n.x)){ n.x = width/2 + (Math.random()-0.5)*200; n.y = height/2 + (Math.random()-0.5)*200; }
+  });
+
+  const sim = d3.forceSimulation(nodes)
+    .force('charge', d3.forceManyBody().strength(-140))
+    .force('center', d3.forceCenter(width/2, height/2))
+    .force('collision', d3.forceCollide().radius(34))
+    .force('link', d3.forceLink(links).id(d=>d.id).distance(90).strength(0.4));
+
+  const link = g.selectAll('.mm-link').data(links).join('line').attr('class','mm-link manual');
+  const node = g.selectAll('.mm-node').data(nodes).join('g').attr('class','mm-node')
+    .call(d3.drag()
+      .on('start', (ev,d)=>{ if(!ev.active) sim.alphaTarget(0.2).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag', (ev,d)=>{ d.fx=ev.x; d.fy=ev.y; })
+      .on('end', (ev,d)=>{ if(!ev.active) sim.alphaTarget(0); d.fx=d.x; d.fy=d.y; persistPositions(nodes); }));
+
+  node.append('circle').attr('r',10).attr('fill', d=>d.color);
+  node.append('text').attr('dy','0.32em').attr('x',14).text(d=> d.name.length>16? d.name.slice(0,16)+'…':d.name);
+
+  node.on('click', (ev,d)=>{
+    if(state.connectMode){
+      if(!state.connectFrom){ state.connectFrom = d.id; }
+      else if(state.connectFrom !== d.id){
+        const rel = {id:'r_'+Date.now(), fromId:state.connectFrom, toId:d.id};
+        state.relations.push(rel); saveCache();
+        apiPost({action:'addRelation', relation:{fromId:rel.fromId,toId:rel.toId}}).catch(()=>{});
+        state.connectFrom = null;
+        renderMindmapFree(document.getElementById('viewContainer'), getFilteredNotes());
+      }
+    } else {
+      openModal(d.id);
+    }
+  });
+
+  sim.on('tick', ()=>{
+    link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+    node.attr('transform', d=>`translate(${d.x},${d.y})`);
+  });
+}
+
+let positionSaveTimer = null;
+function persistPositions(nodes){
+  nodes.forEach(n=>{
+    const existing = state.positions.find(p=>p.noteId===n.id);
+    if(existing){ existing.x=n.x; existing.y=n.y; }
+    else state.positions.push({noteId:n.id, x:n.x, y:n.y});
+  });
+  saveCache();
+  clearTimeout(positionSaveTimer);
+  positionSaveTimer = setTimeout(()=>{
+    apiPost({action:'savePositions', positions: state.positions}).catch(()=>{});
+  }, 800);
+}
+
+/* ---------- PDF 匯出 ---------- */
+async function exportMindmapPdf(svgId, filename){
+  const svgEl = document.getElementById(svgId);
+  const canvas = await html2canvas(svgEl.parentElement, {backgroundColor:'#FFFBF2'});
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({orientation:'landscape', unit:'px', format:[canvas.width, canvas.height]});
+  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+  pdf.save(filename + '.pdf');
+}
+
+/* =========================================================
+   新增／編輯筆記 Modal
+   ========================================================= */
+let editingNote = null;
+
+function openModal(id){
+  editingNote = id ? state.notes.find(n=>n.id===id) : null;
+  document.getElementById('modalTitle').textContent = editingNote ? '編輯筆記' : '新增筆記';
+  document.getElementById('noteId').value = editingNote ? editingNote.id : '';
+  document.getElementById('fTitle').value = editingNote ? editingNote.title : '';
+  document.getElementById('fContent').value = editingNote ? editingNote.content : '';
+  document.getElementById('fDate').value = editingNote ? editingNote.date : new Date().toISOString().slice(0,10);
+  document.getElementById('fSourceType').value = editingNote ? editingNote.sourceType : '書籍';
+  document.getElementById('fSourceName').value = editingNote ? editingNote.sourceName : '';
+  document.getElementById('deleteNoteBtn').style.display = editingNote ? 'inline-block' : 'none';
+  document.getElementById('imagePreviewWrap').innerHTML = editingNote && editingNote.imageUrl
+    ? `<img src="${editingNote.imageUrl}" style="max-width:100%;border-radius:8px;">` : '';
+  window.pendingImageUrl = editingNote ? editingNote.imageUrl : '';
+  selectedCategories = editingNote ? [...editingNote.categories] : [];
+  renderCategoryChips();
+  document.getElementById('noteOverlay').classList.add('open');
+}
+function closeModal(){ document.getElementById('noteOverlay').classList.remove('open'); }
+
+let selectedCategories = [];
+function renderCategoryChips(){
+  const wrap = document.getElementById('categoryChips');
+  wrap.innerHTML = state.categories.map(c=>`
+    <div class="chip-option ${selectedCategories.includes(c.name)?'selected':''}" data-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div>
+  `).join('');
+  wrap.querySelectorAll('.chip-option').forEach(el=>{
+    el.addEventListener('click', ()=> toggleCategoryChip(el.dataset.name));
+  });
+}
+function toggleCategoryChip(name){
+  if(selectedCategories.includes(name)) selectedCategories = selectedCategories.filter(c=>c!==name);
+  else selectedCategories.push(name);
+  renderCategoryChips();
+}
+function addLocalCategoryIfMissing(name){
+  if(!state.categories.find(c=>c.name===name)){
+    const color = ['#FF8FA3','#FFD166','#06D6A0','#4EA8DE','#B892FF','#FF9F5A'][state.categories.length % 6];
+    state.categories.push({name, color});
+    saveCache();
+    apiPost({action:'addCategory', category:{name,color}}).catch(()=>{});
+    renderFilterOptions();
+  }
+}
+
+async function handleImageSelect(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const resized = await resizeImageToBase64(file, 900);
+  window.pendingImageUrl = 'data:image/jpeg;base64,' + resized; // 先本地預覽，儲存時才真正上傳
+  document.getElementById('imagePreviewWrap').innerHTML = `<img src="${window.pendingImageUrl}" style="max-width:100%;border-radius:8px;">`;
+  window.pendingImageBase64 = resized;
+}
+
+function resizeImageToBase64(file, maxWidth){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const scale = Math.min(1, maxWidth/img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width*scale; canvas.height = img.height*scale;
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL('image/jpeg',0.82).split(',')[1]);
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function saveNote(){
+  const title = document.getElementById('fTitle').value.trim();
+  if(!title){ alert('請輸入標題'); return; }
+  const payload = {
+    title,
+    content: document.getElementById('fContent').value.trim(),
+    date: document.getElementById('fDate').value,
+    sourceType: document.getElementById('fSourceType').value,
+    sourceName: document.getElementById('fSourceName').value.trim(),
+    categories: selectedCategories,
+    imageUrl: window.pendingImageUrl && window.pendingImageUrl.startsWith('data:') ? '' : (window.pendingImageUrl||'')
+  };
+
+  // 若有新選的圖片，先上傳到 Drive 取得網址
+  if(window.pendingImageBase64){
+    try{
+      const up = await apiPost({action:'uploadImage', filename:'note_'+Date.now()+'.jpg', mimeType:'image/jpeg', base64: window.pendingImageBase64});
+      if(up.ok) payload.imageUrl = up.result.url;
+    }catch(e){ console.warn('圖片上傳失敗，先略過', e); }
+  }
+
+  if(editingNote){
+    Object.assign(editingNote, payload);
+    saveCache(); renderAll();
+    apiPost({action:'updateNote', note:{id:editingNote.id, ...payload}}).catch(()=>{});
+  } else {
+    const localId = 'local_'+Date.now();
+    const newNote = normalizeNote({id:localId, ...payload, reviewed:false});
+    state.notes.push(newNote);
+    saveCache(); renderAll();
+    apiPost({action:'addNote', note:payload}).then(res=>{
+      if(res.ok){ newNote.id = res.result.id; saveCache(); }
+    }).catch(()=>{});
+  }
+  window.pendingImageBase64 = null;
+  closeModal();
+}
+
+async function deleteNoteHandler(){
+  if(!editingNote) return;
+  if(!confirm('確定要刪除這篇筆記嗎？')) return;
+  state.notes = state.notes.filter(n=>n.id!==editingNote.id);
+  saveCache(); renderAll(); closeModal();
+  apiPost({action:'deleteNote', id:editingNote.id}).catch(()=>{});
+}
+
+/* =========================================================
+   小工具
+   ========================================================= */
+function escapeHtml(str){
+  return (str||'').replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+function hashCode(str){
+  let hash = 0;
+  for(let i=0;i<str.length;i++){ hash = ((hash<<5)-hash) + str.charCodeAt(i); hash |= 0; }
+  return Math.abs(hash);
+}
+</script>
+</body>
+</html>
