@@ -60,15 +60,37 @@
   }
 
   .streak-card{
-    display:flex;align-items:center;gap:20px;
+    width:100%;margin-top:18px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.12);
   }
-  .streak-block{text-align:right;}
-  .streak-block .num{font-size:28px;font-weight:700;color:var(--amber);font-family:'Space Grotesk';line-height:1;}
-  .streak-block .num.alt{color:var(--emerald);}
-  .streak-block .label{font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px;}
-  .stamp-row{display:flex;gap:3px;margin-top:6px;}
-  .stamp{width:16px;height:5px;border-radius:2px;background:rgba(255,255,255,0.18);}
-  .stamp.filled{background:var(--amber);}
+  .streak-metrics{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:14px;}
+  .streak-item{display:flex;align-items:center;gap:10px;}
+  .streak-icon{font-size:20px;line-height:1;}
+  .streak-item .num{font-size:26px;font-weight:700;color:var(--amber);font-family:'Space Grotesk';line-height:1;}
+  .streak-item .num.alt{color:var(--emerald);}
+  .streak-item .num.plain{color:#fff;}
+  .streak-item .label{font-size:11px;color:rgba(255,255,255,0.6);margin-top:4px;}
+  .streak-divider{width:1px;align-self:stretch;background:rgba(255,255,255,0.14);}
+
+  .badge-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+  .badge{
+    display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;
+    background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.55);font-size:12px;font-weight:500;
+  }
+  .badge.achieved{background:var(--emerald);color:#04342C;font-weight:700;}
+  .badge-icon{font-size:14px;line-height:1;}
+
+  #badgeProgress{margin-bottom:16px;}
+  .progress-track{height:6px;border-radius:10px;background:rgba(255,255,255,0.1);overflow:hidden;}
+  .progress-fill{height:100%;border-radius:10px;background:var(--amber);}
+  .progress-text{font-size:11px;color:rgba(255,255,255,0.55);margin-top:6px;}
+
+  .heatmap-wrap{border-top:1px solid rgba(255,255,255,0.12);padding-top:12px;}
+  .heatmap-label{font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:8px;font-family:'IBM Plex Mono';}
+  .heatmap-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,1fr);gap:3px;overflow-x:auto;padding-bottom:2px;}
+  .heat-cell{width:11px;height:11px;border-radius:2px;background:rgba(255,255,255,0.08);}
+  .heat-cell.level-1{background:rgba(255,182,39,0.4);}
+  .heat-cell.level-2{background:var(--amber);}
+  .heat-cell.level-3{background:var(--coral);}
 
   /* ---------- Review banner ---------- */
   .review-banner{
@@ -218,14 +240,36 @@
   <header class="top">
     <h1>學習筆記 <span class="eyebrow">LEARNING LOG</span></h1>
     <div class="streak-card">
-      <div class="streak-block">
-        <div class="num" id="streakNum">0</div>
-        <div class="label">連續記錄天</div>
-        <div class="stamp-row" id="stampRow"></div>
+      <div class="streak-metrics">
+        <div class="streak-item">
+          <span class="streak-icon">🔥</span>
+          <div>
+            <div class="num" id="streakNum">0</div>
+            <div class="label">連續記錄天</div>
+          </div>
+        </div>
+        <div class="streak-divider"></div>
+        <div class="streak-item">
+          <span class="streak-icon">🏆</span>
+          <div>
+            <div class="num alt" id="bestStreakNum">0</div>
+            <div class="label">歷史最高連續</div>
+          </div>
+        </div>
+        <div class="streak-divider"></div>
+        <div class="streak-item">
+          <span class="streak-icon">📅</span>
+          <div>
+            <div class="num plain" id="monthNum">0</div>
+            <div class="label">本月筆記</div>
+          </div>
+        </div>
       </div>
-      <div class="streak-block">
-        <div class="num alt" id="monthNum">0</div>
-        <div class="label">本月筆記</div>
+      <div class="badge-row" id="badgeRow"></div>
+      <div id="badgeProgress"></div>
+      <div class="heatmap-wrap">
+        <div class="heatmap-label">近 13 週記錄熱度</div>
+        <div class="heatmap-grid" id="heatmapGrid"></div>
       </div>
     </div>
   </header>
@@ -310,7 +354,7 @@
 /* =========================================================
    設定：把你部署 Apps Script 後拿到的網址貼在這裡
    ========================================================= */
-const API_URL = 'https://script.google.com/macros/s/AKfycby8YI26JaKcp0-gNkGjp5DDeeOYp5n0BctyorRlWIqqtw7vsIn774PcC6nG_ExkFhNB/exec';
+const API_URL = '請貼上你的 Google Apps Script 網頁應用程式網址';
 
 /* =========================================================
    狀態
@@ -452,26 +496,102 @@ function renderAll(){
   renderView();
 }
 
-function renderStats(){
-  const dates = [...new Set(state.notes.map(n=>n.date))].sort().reverse();
+const STREAK_MILESTONES = [
+  {days:7, icon:'🌱', label:'一週'},
+  {days:30, icon:'🌿', label:'一個月'},
+  {days:100, icon:'🌳', label:'百日'}
+];
+
+function computeCurrentStreak(uniqueDatesDesc){
   let streak = 0;
   let cursor = new Date();
-  for(let i=0;i<dates.length;i++){
-    const d = new Date(dates[i]);
+  for(let i=0;i<uniqueDatesDesc.length;i++){
+    const d = new Date(uniqueDatesDesc[i]);
     const diff = Math.round((cursor - d)/86400000);
     if(diff === streak){ streak++; cursor = d; } else break;
   }
-  document.getElementById('streakNum').textContent = streak;
-  const stampRow = document.getElementById('stampRow');
-  stampRow.innerHTML = '';
-  for(let i=0;i<7;i++){
-    const s = document.createElement('div');
-    s.className = 'stamp' + (i < Math.min(streak,7) ? ' filled':'');
-    stampRow.appendChild(s);
-  }
+  return streak;
+}
+
+function computeLongestStreak(uniqueDatesAsc){
+  let best = 0, run = 0, prev = null;
+  uniqueDatesAsc.forEach(dStr=>{
+    const d = new Date(dStr);
+    if(prev){
+      const diff = Math.round((d - prev)/86400000);
+      run = diff === 1 ? run + 1 : 1;
+    } else {
+      run = 1;
+    }
+    prev = d;
+    if(run > best) best = run;
+  });
+  return best;
+}
+
+function renderStats(){
+  const uniqueDatesDesc = [...new Set(state.notes.map(n=>n.date).filter(Boolean))].sort().reverse();
+  const uniqueDatesAsc = [...uniqueDatesDesc].reverse();
+
+  const currentStreak = computeCurrentStreak(uniqueDatesDesc);
+  const bestStreak = Math.max(computeLongestStreak(uniqueDatesAsc), currentStreak);
+
+  document.getElementById('streakNum').textContent = currentStreak;
+  document.getElementById('bestStreakNum').textContent = bestStreak;
+
   const thisMonth = new Date().toISOString().slice(0,7);
   const monthCount = state.notes.filter(n=>n.date && n.date.startsWith(thisMonth)).length;
   document.getElementById('monthNum').textContent = monthCount;
+
+  renderBadges(currentStreak, bestStreak);
+  renderHeatmap();
+}
+
+function renderBadges(currentStreak, bestStreak){
+  const row = document.getElementById('badgeRow');
+  row.innerHTML = STREAK_MILESTONES.map(m=>{
+    const achieved = bestStreak >= m.days;
+    return `<div class="badge ${achieved?'achieved':''}">
+      <span class="badge-icon">${achieved ? m.icon : '🔒'}</span>
+      <span>${m.label}</span>
+    </div>`;
+  }).join('');
+
+  const progressWrap = document.getElementById('badgeProgress');
+  const next = STREAK_MILESTONES.find(m=>currentStreak < m.days);
+  if(next){
+    const prevThreshold = STREAK_MILESTONES[STREAK_MILESTONES.indexOf(next)-1]?.days || 0;
+    const pct = Math.min(100, Math.round((currentStreak - prevThreshold) / (next.days - prevThreshold) * 100));
+    progressWrap.innerHTML = `
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="progress-text">再堅持 ${next.days - currentStreak} 天解鎖 ${next.icon} ${next.label}</div>`;
+  } else {
+    progressWrap.innerHTML = `<div class="progress-text">🎉 所有里程碑都達成了，你是學習高手！</div>`;
+  }
+}
+
+function renderHeatmap(){
+  const counts = {};
+  state.notes.forEach(n=>{ if(n.date) counts[n.date] = (counts[n.date]||0) + 1; });
+
+  const today = new Date();
+  const start = new Date(today);
+  start.setDate(start.getDate() - 90);
+  const startDow = start.getDay();
+
+  const cells = [];
+  for(let i=0;i<startDow;i++) cells.push(null);
+  for(let d = new Date(start); d <= today; d.setDate(d.getDate()+1)){
+    const key = d.toISOString().slice(0,10);
+    cells.push({date:key, count: counts[key] || 0});
+  }
+
+  const grid = document.getElementById('heatmapGrid');
+  grid.innerHTML = cells.map(c=>{
+    if(!c) return `<div class="heat-cell" style="background:transparent"></div>`;
+    const level = c.count === 0 ? 0 : c.count === 1 ? 1 : c.count === 2 ? 2 : 3;
+    return `<div class="heat-cell level-${level}" title="${c.date}：${c.count} 篇"></div>`;
+  }).join('');
 }
 
 function renderReviewBanner(){
